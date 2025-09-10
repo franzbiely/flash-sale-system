@@ -6,6 +6,14 @@ export interface IPurchase extends Document {
   saleId: Types.ObjectId;
   verified: boolean;
   timestamp: Date;
+  metadata?: {
+    reason?: string;
+    error?: string;
+    processedAt?: Date;
+    finalAttempt?: boolean;
+    existingPurchaseId?: Types.ObjectId;
+    finalProductStock?: number;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,6 +44,17 @@ const purchaseSchema = new Schema<IPurchase>({
     type: Date,
     default: Date.now,
     required: true
+  },
+  metadata: {
+    reason: String,
+    error: String,
+    processedAt: Date,
+    finalAttempt: Boolean,
+    existingPurchaseId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Purchase'
+    },
+    finalProductStock: Number
   }
 }, {
   timestamps: true

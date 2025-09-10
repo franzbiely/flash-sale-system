@@ -61,24 +61,30 @@ const purchaseWorker = new Worker(
         throw new Error(`Flash sale ${saleId} not found`);
       }
 
-      // Simulate purchase processing (replace with actual business logic)
-      await processPurchaseLogic(purchase, product, flashSale);
+      // Process purchase with business logic
+      const processingResult = await processPurchaseLogic(purchase, product, flashSale);
 
-      // Send processing confirmation email
-      await emailService.sendPurchaseConfirmation(
-        email,
-        product.name,
-        purchaseId,
-        true
-      );
+      // Send appropriate confirmation email based on result
+      if (processingResult.success) {
+        await emailService.sendPurchaseConfirmation(
+          email,
+          product.name,
+          purchaseId,
+          true
+        );
+      } else {
+        // Send different email for failed purchases
+        await sendFailureNotification(email, product.name, processingResult.message, processingResult.soldOut);
+      }
 
-      console.log(`Purchase job ${job.id} completed successfully`);
+      console.log(`Purchase job ${job.id} completed: ${processingResult.message}`);
       
       return {
-        success: true,
+        success: processingResult.success,
         purchaseId,
         processedAt: new Date().toISOString(),
-        message: 'Purchase processed successfully'
+        message: processingResult.message,
+        soldOut: processingResult.soldOut
       };
     } catch (error) {
       console.error(`Purchase job ${job.id} failed:`, error);
@@ -87,8 +93,23 @@ const purchaseWorker = new Worker(
       if (job.attemptsMade >= (job.opts.attempts || 3)) {
         await Purchase.findByIdAndUpdate(purchaseId, {
           verified: false,
-          // Add failure metadata if needed
+          $set: {
+            'metadata.reason': 'job_failed_final',
+            'metadata.error': error instanceof Error ? error.message : 'Unknown error',
+            'metadata.processedAt': new Date(),
+            'metadata.finalAttempt': true
+          }
         });
+        
+        // Send failure notification on final attempt
+        try {
+          const product = await Product.findById(productId);
+          if (product) {
+            await sendFailureNotification(email, product.name, 'Processing failed after multiple attempts', false);
+          }
+        } catch (emailError) {
+          console.error('Failed to send failure notification:', emailError);
+        }
       }
       
       throw error;
@@ -105,26 +126,219 @@ async function processPurchaseLogic(
   purchase: any,
   product: any,
   flashSale: any
+): Promise<{ success: boolean; message: string; soldOut?: boolean }> {
+  const { userEmail, productId, saleId } = purchase;
+  
+  console.log(`Processing purchase for ${product.name} by ${userEmail}`);
+  
+  try {
+    // Step 1: Check if customer already has a verified purchase for this product
+    const existingPurchase = await Purchase.findOne({
+      userEmail,
+      productId,
+      verified: true,
+      _id: { $ne: purchase._id } // Exclude current purchase
+    });
+
+    if (existingPurchase) {
+      console.log(`Customer ${userEmail} already has a purchase for product ${productId}`);
+      
+      // Mark current purchase as unverified (duplicate)
+      await Purchase.findByIdAndUpdate(purchase._id, {
+        verified: false,
+        $set: { 
+          'metadata.reason': 'duplicate_purchase',
+          'metadata.existingPurchaseId': existingPurchase._id,
+          'metadata.processedAt': new Date()
+        }
+      });
+
+      return {
+        success: false,
+        message: 'Customer already purchased this product'
+      };
+    }
+
+    // Step 2: Atomically decrement product stock with condition
+    const updatedProduct = await Product.findOneAndUpdate(
+      { 
+        _id: productId,
+        stock: { $gt: 0 } // Only update if stock > 0
+      },
+      { 
+        $inc: { stock: -1 }
+      },
+      { 
+        new: true,
+        runValidators: true
+      }
+    );
+
+    if (!updatedProduct) {
+      console.log(`Product ${productId} is sold out - stock insufficient`);
+      
+      // Mark purchase as failed due to sold out
+      await Purchase.findByIdAndUpdate(purchase._id, {
+        verified: false,
+        $set: {
+          'metadata.reason': 'sold_out',
+          'metadata.processedAt': new Date()
+        }
+      });
+
+      return {
+        success: false,
+        message: 'Product is sold out',
+        soldOut: true
+      };
+    }
+
+    // Step 3: Record successful purchase processing
+    await Purchase.findByIdAndUpdate(purchase._id, {
+      verified: true,
+      $set: {
+        'metadata.reason': 'processed_successfully',
+        'metadata.processedAt': new Date(),
+        'metadata.finalProductStock': updatedProduct.stock
+      }
+    });
+
+    console.log(`Purchase processed successfully for ${userEmail}. Remaining stock: ${updatedProduct.stock}`);
+    
+    // Step 4: Additional business logic (payment, fulfillment, etc.)
+    await performAdditionalProcessing(purchase, product, flashSale, updatedProduct);
+
+    return {
+      success: true,
+      message: 'Purchase processed successfully'
+    };
+
+  } catch (error) {
+    console.error(`Error processing purchase ${purchase._id}:`, error);
+    
+    // Mark purchase as failed with error
+    await Purchase.findByIdAndUpdate(purchase._id, {
+      verified: false,
+      $set: {
+        'metadata.reason': 'processing_error',
+        'metadata.error': error instanceof Error ? error.message : 'Unknown error',
+        'metadata.processedAt': new Date()
+      }
+    });
+
+    throw error;
+  }
+}
+
+// Additional processing logic (placeholder for business operations)
+async function performAdditionalProcessing(
+  purchase: any,
+  product: any,
+  flashSale: any,
+  updatedProduct: any
 ): Promise<void> {
-  // Simulate processing time
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  // Here you would implement your actual purchase processing logic:
-  // - Payment processing
-  // - Inventory management
-  // - Order fulfillment
-  // - Shipping arrangements
-  // - Third-party integrations
-  
-  console.log(`Processing purchase for ${product.name} by ${purchase.userEmail}`);
-  
-  // Example: Update product stock if needed
-  // await Product.findByIdAndUpdate(product._id, { $inc: { stock: -1 } });
-  
-  // Example: Log to external systems
-  // await externalOrderSystem.createOrder({...});
-  
-  console.log(`Purchase processing completed for ${purchase._id}`);
+  try {
+    // Simulate processing time
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Here you would implement additional business logic:
+    // - Payment processing (Stripe, PayPal, etc.)
+    // - Generate order numbers
+    // - Update CRM systems
+    // - Send to fulfillment center
+    // - Update analytics
+    // - Send webhooks to external systems
+    
+    console.log(`Additional processing completed for purchase ${purchase._id}`);
+    
+    // Example: Log to external order system
+    /*
+    await externalOrderSystem.createOrder({
+      purchaseId: purchase._id,
+      customerId: purchase.userEmail,
+      productId: product._id,
+      productName: product.name,
+      price: product.salePrice || product.price,
+      quantity: 1,
+      timestamp: purchase.timestamp
+    });
+    */
+    
+  } catch (error) {
+    console.error(`Additional processing failed for purchase ${purchase._id}:`, error);
+    // Don't throw here - main purchase is already recorded successfully
+  }
+}
+
+// Send failure notification email
+async function sendFailureNotification(
+  email: string,
+  productName: string,
+  reason: string,
+  soldOut: boolean = false
+): Promise<void> {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_FROM || 'noreply@flashsale.com',
+      to: email,
+      subject: `Purchase Update - ${productName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #dc3545;">Purchase Update</h2>
+          
+          <p>Hello,</p>
+          
+          <p>We have an update regarding your purchase request for <strong>${productName}</strong>.</p>
+          
+          <div style="background-color: #f8d7da; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc3545;">
+            <h3 style="margin: 0; color: #721c24;">${soldOut ? 'Product Sold Out' : 'Purchase Processing Issue'}</h3>
+            <p style="margin: 10px 0 0 0; color: #721c24;">${reason}</p>
+          </div>
+          
+          ${soldOut ? `
+            <p>Unfortunately, this product sold out while your purchase was being processed. This can happen during high-demand flash sales.</p>
+            <p>We apologize for any inconvenience. Please check our other available flash sales!</p>
+          ` : `
+            <p>We encountered an issue processing your purchase. Our team has been notified and will investigate.</p>
+            <p>If you have any questions, please contact our support team.</p>
+          `}
+          
+          <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+          <p style="color: #666; font-size: 12px;">
+            This is an automated message from Flash Sale System. Please do not reply to this email.
+          </p>
+        </div>
+      `,
+      text: `
+        Purchase Update - ${productName}
+        
+        We have an update regarding your purchase request for ${productName}.
+        
+        ${soldOut ? 'Product Sold Out' : 'Purchase Processing Issue'}: ${reason}
+        
+        ${soldOut ? 
+          'Unfortunately, this product sold out while your purchase was being processed. This can happen during high-demand flash sales. We apologize for any inconvenience.' :
+          'We encountered an issue processing your purchase. Our team has been notified and will investigate.'
+        }
+      `
+    };
+
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransporter({
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.EMAIL_PORT || '587'),
+      secure: (process.env.EMAIL_PORT || '587') === '465',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Failure notification sent to ${email} for ${productName}`);
+  } catch (error) {
+    console.error('Failed to send failure notification:', error);
+  }
 }
 
 // Queue event handlers
