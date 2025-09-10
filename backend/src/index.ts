@@ -6,6 +6,7 @@ import { connectToDatabase } from './config/db';
 import healthRouter from './routes/health';
 import adminRouter from './routes/admin';
 import flashSalesRouter from './routes/flashSales';
+import purchaseRouter from './routes/purchase';
 
 async function startServer(): Promise<void> {
   const app: Application = express();
@@ -17,6 +18,7 @@ async function startServer(): Promise<void> {
   app.use('/health', healthRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/flash-sales', flashSalesRouter);
+  app.use('/api', purchaseRouter);
 
   try {
     await connectToDatabase(env.MONGODB_URI);
