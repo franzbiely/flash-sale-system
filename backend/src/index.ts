@@ -4,6 +4,7 @@ import morgan from 'morgan';
 import { env } from './config/env';
 import { connectToDatabase } from './config/db';
 import healthRouter from './routes/health';
+import adminRouter from './routes/admin';
 
 async function startServer(): Promise<void> {
   const app: Application = express();
@@ -13,6 +14,7 @@ async function startServer(): Promise<void> {
   app.use(morgan('dev'));
 
   app.use('/health', healthRouter);
+  app.use('/api/admin', adminRouter);
 
   try {
     await connectToDatabase(env.MONGODB_URI);
