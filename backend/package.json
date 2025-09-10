@@ -14,13 +14,15 @@
   "description": "",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "bullmq": "^5.58.5",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.1",
     "morgan": "^1.10.1",
-    "nodemailer": "^7.0.6"
+    "nodemailer": "^7.0.6",
+    "redis": "^5.8.2"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
@@ -30,6 +32,7 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^24.3.1",
     "@types/nodemailer": "^7.0.1",
+    "@types/redis": "^4.0.10",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }

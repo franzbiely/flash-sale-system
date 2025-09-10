@@ -27,6 +27,7 @@ import {
   updatePurchaseVerification,
   getPurchaseAnalytics
 } from '../controllers/purchaseController';
+import { getQueueStatistics } from '../controllers/queueController';
 
 const router = Router();
 
@@ -66,5 +67,8 @@ router.get('/purchases', authenticateAdmin, getAllPurchases);
 router.get('/purchases/:customerId', authenticateAdmin, getPurchasesByCustomer);
 router.put('/purchases/:id/verify', authenticateAdmin, updatePurchaseVerification);
 router.get('/analytics/purchases', authenticateAdmin, getPurchaseAnalytics);
+
+// Queue management routes (all protected)
+router.get('/queue/stats', authenticateAdmin, getQueueStatistics);
 
 export default router;

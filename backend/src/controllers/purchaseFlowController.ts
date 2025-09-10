@@ -6,6 +6,7 @@ import { Customer } from '../models/Customer';
 import { Purchase } from '../models/Purchase';
 import { OTP } from '../models/OTP';
 import { emailService } from '../services/emailService';
+import { enqueuePurchase, PurchaseJobData } from '../services/purchaseQueue';
 
 // Request purchase with OTP generation
 export async function requestPurchase(req: Request, res: Response): Promise<void> {
@@ -235,7 +236,24 @@ export async function verifyPurchase(req: Request, res: Response): Promise<void>
       // Clean up used OTP
       await OTP.deleteOne({ _id: otpRecord._id });
 
-      // Send purchase confirmation email (non-blocking)
+      // Enqueue purchase for background processing
+      const jobData: PurchaseJobData = {
+        email: email.toLowerCase(),
+        productId: productId.toString(),
+        saleId: activeFlashSale._id.toString(),
+        purchaseId: savedPurchase._id.toString(),
+        timestamp: savedPurchase.timestamp.toISOString()
+      };
+
+      try {
+        const job = await enqueuePurchase(jobData);
+        console.log(`Purchase job ${job.id} enqueued for purchase ${savedPurchase._id}`);
+      } catch (queueError) {
+        console.error('Failed to enqueue purchase job:', queueError);
+        // Continue with response even if queue fails - purchase is still recorded
+      }
+
+      // Send immediate purchase confirmation email (non-blocking)
       emailService.sendPurchaseConfirmation(
         email,
         product.name,
@@ -255,7 +273,8 @@ export async function verifyPurchase(req: Request, res: Response): Promise<void>
           verified: savedPurchase.verified,
           timestamp: savedPurchase.timestamp,
           saleEndTime: activeFlashSale.endTime,
-          remainingStock: updatedFlashSale.stock
+          remainingStock: updatedFlashSale.stock,
+          queuedForProcessing: true
         }
       });
     } catch (purchaseError) {

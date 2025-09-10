@@ -17,6 +17,9 @@ export const env = {
   EMAIL_USER: process.env.EMAIL_USER || '',
   EMAIL_PASS: process.env.EMAIL_PASS || '',
   EMAIL_FROM: process.env.EMAIL_FROM || 'noreply@flashsale.com',
+  REDIS_HOST: process.env.REDIS_HOST || 'localhost',
+  REDIS_PORT: parsePort(process.env.REDIS_PORT, 6379),
+  REDIS_PASSWORD: process.env.REDIS_PASSWORD || '',
 } as const;
 
 
