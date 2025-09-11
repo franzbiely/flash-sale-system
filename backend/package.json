@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "seed:admin": "tsx src/seeds/createAdmin.ts",
     "seed:all": "tsx src/seeds/seedDatabase.ts",
+    "test-email": "tsx src/scripts/testEmail.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

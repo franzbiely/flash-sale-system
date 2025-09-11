@@ -7,6 +7,8 @@ interface ProductCardProps {
   showCountdown?: boolean;
   size?: 'compact' | 'standard' | 'featured';
   className?: string;
+  userEmail?: string;
+  alreadyPurchased?: boolean;
 }
 
 export default function ProductCard({ 
@@ -14,7 +16,9 @@ export default function ProductCard({
   onBuyNow, 
   showCountdown = true, 
   size = 'standard',
-  className = '' 
+  className = '',
+  userEmail,
+  alreadyPurchased = false
 }: ProductCardProps) {
   const { productId: product, stock, status } = sale;
 
@@ -82,7 +86,7 @@ export default function ProductCard({
   const stockStatus = getStockStatus();
   const statusBadge = getStatusBadge();
   const isOutOfStock = stock === 0;
-  const canPurchase = status === 'active' && !isOutOfStock;
+  const canPurchase = status === 'active' && !isOutOfStock && !alreadyPurchased;
 
   return (
     <div className={`bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300 ${sizeClasses.container} ${className}`}>
@@ -184,11 +188,14 @@ export default function ProductCard({
           className={`w-full font-medium rounded-md transition-colors duration-200 ${sizeClasses.button} ${
             canPurchase
               ? 'bg-blue-600 hover:bg-blue-700 text-white'
+              : alreadyPurchased
+              ? 'bg-green-100 text-green-700 cursor-not-allowed'
               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
           }`}
         >
           {status === 'upcoming' ? 'Coming Soon' : 
            status === 'ended' ? 'Sale Ended' :
+           alreadyPurchased ? 'Already Purchased' :
            isOutOfStock ? 'Out of Stock' : 
            'Buy Now'}
         </button>

@@ -25,6 +25,7 @@ export default function FlashSaleList({
   const [selectedSale, setSelectedSale] = useState<FlashSale | null>(null);
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
   const [pagination, setPagination] = useState<any>(null);
+  const [userPurchases, setUserPurchases] = useState<Set<string>>(new Set());
 
   const tabs = [
     { id: 'active' as TabType, name: 'Active Sales', icon: '🔥' },
@@ -68,6 +69,9 @@ export default function FlashSaleList({
 
   useEffect(() => {
     fetchSales(activeTab);
+    if (activeTab === 'active') {
+      checkUserPurchases();
+    }
   }, [activeTab, limit]);
 
   const handleTabChange = (tab: TabType) => {
@@ -81,12 +85,31 @@ export default function FlashSaleList({
     }
   };
 
+  const checkUserPurchases = async () => {
+    // Get user email from localStorage or session
+    const userEmail = localStorage.getItem('userEmail');
+    if (!userEmail) return;
+
+    try {
+      const response = await apiService.getPurchaseStatus(userEmail);
+      if (response.data.success && response.data.data.recentPurchases) {
+        const purchasedSaleIds = new Set(
+          response.data.data.recentPurchases.map((purchase: any) => purchase.saleId)
+        );
+        setUserPurchases(purchasedSaleIds);
+      }
+    } catch (error) {
+      console.error('Error checking user purchases:', error);
+    }
+  };
+
   const handlePurchaseModalClose = () => {
     setPurchaseModalOpen(false);
     setSelectedSale(null);
-    // Refresh active sales to update stock
+    // Refresh active sales to update stock and check purchases
     if (activeTab === 'active') {
       fetchSales('active');
+      checkUserPurchases();
     }
   };
 
@@ -199,6 +222,7 @@ export default function FlashSaleList({
                 sale={sale}
                 onBuyNow={handleBuyNow}
                 showCountdown={activeTab === 'active'}
+                alreadyPurchased={userPurchases.has(sale._id)}
               />
             ))}
           </div>
