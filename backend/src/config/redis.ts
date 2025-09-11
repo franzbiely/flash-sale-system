@@ -4,8 +4,9 @@ import { env } from './env';
 export const redisConnection = new Redis({
   host: env.REDIS_HOST,
   port: env.REDIS_PORT,
+  username: env.REDIS_USERNAME || undefined,
   password: env.REDIS_PASSWORD || undefined,
-  maxRetriesPerRequest: 3,
+  maxRetriesPerRequest: null,
   retryDelayOnFailure: 1000,
   lazyConnect: true,
 });
