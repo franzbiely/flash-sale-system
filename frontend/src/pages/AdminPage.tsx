@@ -24,19 +24,16 @@ export default function AdminPage() {
   const checkAuth = async () => {
     const token = localStorage.getItem('adminToken');
     if (!token) {
-      setIsLoading(false);
+      navigate('/admin/login');
       return;
     }
 
     try {
       await apiService.getAdminProfile();
-      setIsAuthenticated(true);
-      await fetchStats();
+      navigate('/admin/dashboard');
     } catch (error) {
       localStorage.removeItem('adminToken');
-      setIsAuthenticated(false);
-    } finally {
-      setIsLoading(false);
+      navigate('/admin/login');
     }
   };
 
